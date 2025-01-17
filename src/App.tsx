@@ -1,19 +1,18 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import AirdropForm from './components/AirdropForm';
 import { ThemeToggle } from './components/ThemeToggle';
 import { Github } from 'lucide-react';
 import FuelLogo from "./assets/fuel_logo.svg";
 import FuelLogoLight from "./assets/fuel_logo_light.svg";
-import { Analytics } from "@vercel/analytics/react";
 
 function App() {
-    const [isDark, setIsDark] = useState(() => {
-      const saved = localStorage.getItem("theme");
-      return (
-        saved === "dark" ||
-        (!saved && window.matchMedia("(prefers-color-scheme: dark)").matches)
-      );
-    });
+  const [isDark, setIsDark] = useState(() => {
+    const saved = localStorage.getItem("theme");
+    return (
+      saved === "dark" ||
+      (!saved && window.matchMedia("(prefers-color-scheme: dark)").matches)
+    );
+  });
   return (
     <div className="min-h-screen bg-white dark:bg-fuel-dark-900 transition-colors">
       <div className="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
@@ -48,7 +47,6 @@ function App() {
           <AirdropForm />
         </div>
       </div>
-      <Analytics />
     </div>
   );
 }

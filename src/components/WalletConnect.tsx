@@ -1,10 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Wallet, LogOut } from 'lucide-react';
 import {
-  useBalance,
   useConnectUI,
   useDisconnect,
-  useIsConnected,
   useWallet,
 } from "@fuels/react";
 

@@ -1,15 +1,12 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Upload, FileSpreadsheet, ArrowLeft, Download, X, AlertCircle } from "lucide-react";
-import WalletConnect from "./WalletConnect";
 import TokenSelector from "./TokenSelector";
-import { useWallet } from "@fuels/react";
 import { Airdrop } from "../sway-api/index.ts";
 import { Address, bn } from "fuels";
 import toast from "react-hot-toast";
 import AirdropNFTForm from './AirdropNFTForm';
 import { Token } from '../types/token';
-// import { Toggle } from "@radix-ui/react-toggle";
-
+import { useUnlockedWallet } from "../hooks/useUnlockedWallet.ts";
 
 
 interface AirdropEntry {
@@ -30,8 +27,9 @@ interface FailedEntry extends AirdropEntry {
 //   setShowUnknownAssets: (show: boolean) => void;
 // }
 
-const contractId =
+const MAINNET_CONTRACT_ID =
   "0xcee11ba55ecf698c6a86c4444f515c5fe499049a0084208fd093186a7ac6e89f";
+const TESTNET_CONTRACT_ID = "0xe9488080d7fce4e119a2676d9bbb8da2c8ffe12223debad7a4a8f22e632c281b";
 
 // Add custom toast styles
 const toastStyles = {
@@ -70,10 +68,14 @@ function AirdropForm() {
   const [addresses, setAddresses] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentStep, setCurrentStep] = useState<'token' | 'recipients'>('token');
-  const { wallet } = useWallet();
+  const [privateKey, setPrivateKey] = useState<string | undefined>(undefined);
+  const [selectedNetwork, setSelectedNetwork] = useState<'Testnet' | 'Mainnet'>('Testnet');
+  const [connectedPrivateKey, setConnectedPrivateKey] = useState<string>("");
+  const { wallet } = useUnlockedWallet(connectedPrivateKey, selectedNetwork);
   const [airdropType, setAirdropType] = useState<'tokens' | 'nfts'>('tokens');
   const contract = useMemo(() => {
     if (wallet) {
+      const contractId = wallet.provider.getChainId() === 0 ? TESTNET_CONTRACT_ID : MAINNET_CONTRACT_ID;
       const contract = new Airdrop(contractId, wallet);
       return contract;
     }
@@ -119,8 +121,8 @@ function AirdropForm() {
               symbol: metadata.symbol || "Unknown",
               name: metadata.name || "Unknown Asset",
               isNFT: metadata.isNFT || false,
-              balance: metadata.decimals 
-                ? balance.amount.format({units: metadata.decimals}).toString()
+              balance: metadata.decimals
+                ? balance.amount.format({ units: metadata.decimals }).toString()
                 : balance.amount.toString(),
               decimals: metadata.decimals || 0,
             };
@@ -179,7 +181,7 @@ function AirdropForm() {
           .map((item) => item.trim());
         return { address, amount };
       });
-    
+
     setRecipientCount(entries.length);
     setTotalAmount(calculateTotalAmount(entries));
   };
@@ -231,23 +233,23 @@ function AirdropForm() {
     setIsProcessing(true);
     setFailedEntries([]); // Reset failed entries at start
     let successfulBatches = 0; // Add counter for successful batches
-    
+
     try {
       const entries = parseAddresses();
-      
+
       const totalBatches = Math.ceil(entries.length / BATCH_SIZE);
       setBatchProgress({ current: 0, total: totalBatches });
 
       for (let i = 0; i < entries.length; i += BATCH_SIZE) {
         const batchEntries = entries.slice(i, i + BATCH_SIZE);
         const batchIndex = Math.floor(i / BATCH_SIZE);
-        
+
         try {
           const batchAddresses = batchEntries.map((entry) => ({
             Address: { bits: entry.address }
           }));
-          
-          const batchAmounts = batchEntries.map((entry) => bn.parseUnits(entry.amount,selectedToken.decimals));
+
+          const batchAmounts = batchEntries.map((entry) => bn.parseUnits(entry.amount, selectedToken.decimals));
           const batchTotalAmount = batchAmounts.reduce(
             (acc, amount) => acc.add(amount),
             bn(0)
@@ -271,7 +273,7 @@ function AirdropForm() {
 
             const request = await scope.getTransactionRequest();
             const { coins } = await wallet.getCoins(selectedToken.assetId);
-            
+
             const resources = await wallet.getResourcesToSpend([
               { amount: batchTotalAmount, assetId: selectedToken.assetId },
             ]);
@@ -296,7 +298,7 @@ function AirdropForm() {
             const tx = await wallet.sendTransaction(request);
             await tx.wait();
             console.log(`Batch ${batchIndex + 1} transaction:`, tx);
-            
+
             // Add success toast for each batch
             successfulBatches++;
             toast.success(`Batch ${batchIndex + 1}/${totalBatches} completed successfully!`, {
@@ -311,7 +313,7 @@ function AirdropForm() {
             duration: 5000,
             ...toastStyles.error,
           });
-          
+
           const failedBatchEntries = batchEntries.map(entry => ({
             ...entry,
             batchIndex: batchIndex + 1
@@ -329,7 +331,7 @@ function AirdropForm() {
           ...toastStyles.success,
         });
       }
-      
+
     } catch (error) {
       console.error("Airdrop failed:", error);
       toast.error('Airdrop process failed. Please try again.', {
@@ -378,30 +380,27 @@ function AirdropForm() {
             Airdrop tokens seamlessly to your community
           </span>
         </div>
-        <WalletConnect />
       </div>
-      
+
       {wallet && (
         <div className="flex justify-start">
           <div className="inline-flex p-1 bg-gray-100 dark:bg-fuel-dark-700 rounded-lg">
             <div className="grid grid-cols-2 w-[300px]">
               <button
                 onClick={() => setAirdropType("tokens")}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                  airdropType === "tokens"
-                    ? "bg-fuel-green text-black"
-                    : "text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
-                }`}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${airdropType === "tokens"
+                  ? "bg-fuel-green text-black"
+                  : "text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+                  }`}
               >
                 Airdrop Tokens
               </button>
               <button
                 onClick={() => setAirdropType("nfts")}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                  airdropType === "nfts"
-                    ? "bg-fuel-green text-black"
-                    : "text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
-                }`}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${airdropType === "nfts"
+                  ? "bg-fuel-green text-black"
+                  : "text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+                  }`}
               >
                 Airdrop NFTs
               </button>
@@ -411,19 +410,24 @@ function AirdropForm() {
       )}
 
       {!wallet ? (
-        <div className="flex flex-col items-center justify-center p-8 space-y-6 border-2 border-dashed border-gray-300 dark:border-fuel-dark-600 rounded-lg bg-gray-50 dark:bg-fuel-dark-800/90">
-          <div className="text-center space-y-2">
+        <div className="flex flex-col justify-center p-8 space-y-6 border-2 border-dashed border-gray-300 dark:border-fuel-dark-600 rounded-lg bg-gray-50 dark:bg-fuel-dark-800/90">
+          <div className="text-center flex flex-col gap-y-8">
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Connect Your Wallet
+              Enter you private key
             </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              To start, please connect your Fuel wallet!
-            </p>
+            <input className="w-full bg-gray-100 dark:bg-fuel-dark-700 rounded-lg border border-gray-300 dark:border-fuel-dark-600 text-sm text-gray-900 dark:text-white outline-none focus:ring-fuel-green focus:border-fuel-green font-mono px-4 py-2"
+              type="text" value={privateKey ?? ""} onChange={(e) => setPrivateKey(e.target.value)} placeholder="Private key" />
           </div>
-          <WalletConnect />
-          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-            <AlertCircle className="w-4 h-4" />
-            <span>Make sure you have the Fuel Wallet extension installed</span>
+          <div>
+            <select value={selectedNetwork} onChange={(e) => setSelectedNetwork(e.target.value as "Testnet" | "Mainnet")} className="w-full bg-gray-100 dark:bg-fuel-dark-700 rounded-lg border border-gray-300 dark:border-fuel-dark-600 text-sm text-gray-900 dark:text-white outline-none focus:ring-fuel-green focus:border-fuel-green font-mono px-4 py-2">
+              <option value="Testnet">Testnet</option>
+              <option value="Mainnet">Mainnet</option>
+            </select>
+          </div>
+          <div className="flex justify-center">
+            <button className="px-6 py-3 border border-transparent text-sm font-medium rounded-md text-black dark:text-fuel-green bg-fuel-green dark:bg-transparent dark:border-fuel-green hover:bg-fuel-green/90 dark:hover:bg-fuel-green/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!privateKey}
+              onClick={() => setConnectedPrivateKey(privateKey ?? "")}>Connect</button>
           </div>
         </div>
       ) : airdropType === "nfts" ? (
