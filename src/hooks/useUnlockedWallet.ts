@@ -7,8 +7,13 @@ export const useUnlockedWallet = (privateKey: string | undefined, network: "Test
 
     const unlockedWallet = useMemo(() => {
         if (provider && privateKey) {
-            const unlockedWallet = Wallet.fromPrivateKey(privateKey, provider);
-            return unlockedWallet;
+            try {
+                const unlockedWallet = Wallet.fromPrivateKey(privateKey, provider);
+                return unlockedWallet;
+            } catch (e) {
+                console.log(e);
+                return null;
+            }
         }
         return null;
     }, [provider, privateKey]);
